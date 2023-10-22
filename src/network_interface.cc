@@ -10,7 +10,7 @@ using namespace std;
 NetworkInterface::NetworkInterface( const EthernetAddress& ethernet_address, const Address& ip_address )
   : ethernet_address_( ethernet_address ), ip_address_( ip_address )
 {
-  cerr << "DEBUG: Network interface has Ethernet address " << to_string( ethernet_address_ ) << " and IP address "
+  cout << "DEBUG: Network interface has Ethernet address " << to_string( ethernet_address_ ) << " and IP address "
        << ip_address.ip() << "\n";
 }
 
@@ -22,8 +22,19 @@ NetworkInterface::NetworkInterface( const EthernetAddress& ethernet_address, con
 // Address::ipv4_numeric() method.
 void NetworkInterface::send_datagram( const InternetDatagram& dgram, const Address& next_hop )
 {
-  (void)dgram;
-  (void)next_hop;
+  // lookup MAC Address of next hop and create ethernet frame if it does
+  if ( arp_table_.contains( next_hop.ipv4_numeric() ) ) {
+    const std::pair<int, EthernetAddress> lookup = arp_table_[next_hop.ipv4_numeric()];
+    EthernetHeader header;
+    header.type = EthernetHeader::TYPE_IPv4;
+    header.src = ethernet_address_;
+    header.dst = std::get<EthernetAddress>( lookup );
+    EthernetFrame frame;
+    frame.header = header;
+    frame.payload = serialize( dgram );
+    send_queue_.push( frame );
+  } else {
+  }
 }
 
 // frame: the incoming Ethernet frame
@@ -42,4 +53,20 @@ void NetworkInterface::tick( const size_t ms_since_last_tick )
 optional<EthernetFrame> NetworkInterface::maybe_send()
 {
   return {};
+}
+
+// HELPER FUNCTIONS
+
+// determine whether the two ethernet addresses are equal or not
+bool check_ethernet_address_equal( const EthernetAddress add1, const EthernetAddress add2 )
+{
+  if ( add1.size() != add2.size() ) {
+    return false;
+  }
+  for ( size_t i = 0; i < add1.size(); i++ ) {
+    if ( add1[i] != add2[i] ) {
+      return false;
+    }
+  }
+  return true;
 }
