@@ -44,15 +44,15 @@ private:
   // ARP table
   // A map with keys as integer IP addresses and values as
   // (time of cache, Ethernet Address) pairs
-  std::unordered_map<uint32_t, std::pair<int, EthernetAddress>> arp_table_ {};
+  std::unordered_map<uint32_t, std::pair<size_t, EthernetAddress>> arp_table_ {};
 
-  // Number of milliseconds of time that have passed
-  int time_ = 0;
+  // Internal time tracker in milliseconds
+  size_t time_ = 0;
 
-  // Waiting queues
+  // Waiting for next hop mac address queues
   // A map with keys as IP addresses we are waiting for and values as
   // (time since we are waiting, queue of datagrams waiting) pairs
-  std::unordered_map<uint32_t, std::pair<int, std::queue<InternetDatagram>>> waiting_queues_ {};
+  std::unordered_map<uint32_t, std::pair<size_t, std::queue<InternetDatagram>>> waiting_queues_ {};
 
   // Ready to be sent queue
   // A queue of Ethernet Frames that are ready to be sent out
