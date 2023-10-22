@@ -11,7 +11,8 @@ I would like to credit/thank these classmates for their help: noone
 
 This programming assignment took me about 5 hours to do.
 
-Program Structure and Design of the NetworkInterface:
+### Program Structure and Design of the NetworkInterface
+
 I added three data structures to the network interface. 
 
 The first was a time tracking integer, which tracks what the current time is in milliseconds. 
@@ -32,7 +33,7 @@ I also created three helper functions outside the network interface. They are ou
 
 These helper functions and methods provide an overview of how the 4 public methods in the interface were broken down into smaller tasks, which hopefully makes the code more readable.
 
-Implementation Challenges:
+### Implementation Challenges
 The main challenge I faced when implementing was ensuring I was translating the intructions into my code correctly. For example, one of the requirements is that after more than 5 seconds, any datagrams in the queue waiting for the ARP response should be deleted. I was not sure whether all the datagrams waiting should have been deleted, or only the ones waiting for more than 5 seconds (I was able to figure it out evenetually). Another small challenge was designing the data structures. For example, I initially forgot to include any kind of time tracking in my ARP table or waiting queues. I then came up with the design to have pairs of (time cached, MAC address) in my map as opposed to just the MAC address in the ARP table, and did the equivalent for the waiting queues map.
 
 Remaining Bugs:
