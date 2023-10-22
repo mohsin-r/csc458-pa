@@ -1,6 +1,7 @@
 #pragma once
 
 #include "address.hh"
+#include "arp_message.hh"
 #include "ethernet_frame.hh"
 #include "ipv4_datagram.hh"
 
@@ -57,6 +58,23 @@ private:
   // Ready to be sent queue
   // A queue of Ethernet Frames that are ready to be sent out
   std::queue<EthernetFrame> send_queue_ {};
+
+  // Private Helper Functions
+
+  // Sends arp request for dst_ip if one has not been sent within 5 seconds and queues dgram to wait for response
+  // ("Sending" is accomplished by making sure maybe_send() will release the frame when next called,
+  // but please consider the frame sent as soon as it is generated.)
+  void send_arp_request_( const InternetDatagram dgram, const uint32_t dst_ip );
+
+  // Handle any received arp response
+  // Learns mapping between sender's ip address and mac address
+  // Sends any datagrams waiting for the response
+  // ("Sending" is accomplished by making sure maybe_send() will release the frame when next called,
+  // but please consider the frame sent as soon as it is generated.)
+  void handle_arp_response_( const ARPMessage response );
+
+  // Sends reply to arp requests for this ip address
+  void handle_arp_request_( const ARPMessage request );
 
 public:
   // Construct a network interface with given Ethernet (network-access-layer) and IP (internet-layer)
