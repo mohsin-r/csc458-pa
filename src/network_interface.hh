@@ -1,26 +1,27 @@
 #pragma once
-
+ 
 #include "address.hh"
+#include "arp_message.hh"
 #include "ethernet_frame.hh"
 #include "ipv4_datagram.hh"
-
+ 
 #include <iostream>
 #include <list>
 #include <optional>
 #include <queue>
 #include <unordered_map>
 #include <utility>
-
+ 
 // A "network interface" that connects IP (the internet layer, or network layer)
 // with Ethernet (the network access layer, or link layer).
-
+ 
 // This module is the lowest layer of a TCP/IP stack
 // (connecting IP with the lower-layer network protocol,
 // e.g. Ethernet). But the same module is also used repeatedly
 // as part of a router: a router generally has many network
 // interfaces, and the router's job is to route Internet datagrams
 // between the different interfaces.
-
+ 
 // The network interface translates datagrams (coming from the
 // "customer," e.g. a TCP/IP stack or router) into Ethernet
 // frames. To fill in the Ethernet destination address, it looks up
@@ -37,31 +38,65 @@ class NetworkInterface
 private:
   // Ethernet (known as hardware, network-access, or link-layer) address of the interface
   EthernetAddress ethernet_address_;
-
+ 
   // IP (known as Internet-layer or network-layer) address of the interface
   Address ip_address_;
-
+ 
+  // ARP table
+  // A map with keys as integer IP addresses and values as
+  // (time of cache, Ethernet Address) pairs
+  std::unordered_map<uint32_t, std::pair<size_t, EthernetAddress>> arp_table_ {};
+ 
+  // Internal time tracker in milliseconds
+  size_t time_ = 0;
+ 
+  // Waiting for next hop mac address queues
+  // A map with keys as IP addresses we are waiting for and values as
+  // (time since we are waiting, queue of datagrams waiting) pairs
+  std::unordered_map<uint32_t, std::pair<size_t, std::queue<InternetDatagram>>> waiting_queues_ {};
+ 
+  // Ready to be sent queue
+  // A queue of Ethernet Frames that are ready to be sent out
+  std::queue<EthernetFrame> send_queue_ {};
+ 
+  // Private Helper Functions
+ 
+  // Sends arp request for dst_ip if one has not been sent within 5 seconds and queues dgram to wait for response
+  // ("Sending" is accomplished by making sure maybe_send() will release the frame when next called,
+  // but please consider the frame sent as soon as it is generated.)
+  void send_arp_request_( const InternetDatagram dgram, const uint32_t dst_ip );
+ 
+  // Handle any received arp response
+  // Learns mapping between sender's ip address and mac address
+  // Sends any datagrams waiting for the response
+  // ("Sending" is accomplished by making sure maybe_send() will release the frame when next called,
+  // but please consider the frame sent as soon as it is generated.)
+  void handle_arp_response_( const ARPMessage response );
+ 
+  // Sends reply to arp requests for this ip address
+  void handle_arp_request_( const ARPMessage request );
+ 
 public:
   // Construct a network interface with given Ethernet (network-access-layer) and IP (internet-layer)
   // addresses
   NetworkInterface( const EthernetAddress& ethernet_address, const Address& ip_address );
-
+ 
   // Access queue of Ethernet frames awaiting transmission
   std::optional<EthernetFrame> maybe_send();
-
+ 
   // Sends an IPv4 datagram, encapsulated in an Ethernet frame (if it knows the Ethernet destination
   // address). Will need to use [ARP](\ref rfc::rfc826) to look up the Ethernet destination address
   // for the next hop.
   // ("Sending" is accomplished by making sure maybe_send() will release the frame when next called,
   // but please consider the frame sent as soon as it is generated.)
   void send_datagram( const InternetDatagram& dgram, const Address& next_hop );
-
+ 
   // Receives an Ethernet frame and responds appropriately.
   // If type is IPv4, returns the datagram.
   // If type is ARP request, learn a mapping from the "sender" fields, and send an ARP reply.
   // If type is ARP reply, learn a mapping from the "sender" fields.
   std::optional<InternetDatagram> recv_frame( const EthernetFrame& frame );
-
+ 
   // Called periodically when time elapses
   void tick( size_t ms_since_last_tick );
 };
