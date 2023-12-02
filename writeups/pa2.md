@@ -23,7 +23,7 @@ These helper functions and methods provide an overview of how the 2 public metho
 
 Finally, the 2 public methods in the `Router` class were implemented as per the steps given in the assignment handout
 
-Implementation Challenges:
+### Implementation Challenges
 The main challenge I had when implmeneting was ensuring that I was using the reference/alias of a variable rather than a copy of it. It took me several hours to figure out that the reason I was failing the tests is that I was using copies of the network interfaces rather than aliases. Once I changed all the types in my code to use & in the type, the problem was resolved.
 
 I also had a bit of trouble figuring out how to use the optional data type. For example, in my `find_best_match_`, I was not updating the value of the optional variable correctly, which led to a no best match found result everytime. After reading the documentation properly, I was able to resolve this issue as well.
