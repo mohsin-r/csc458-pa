@@ -55,6 +55,17 @@ class Router
   // The router's collection of network interfaces
   std::vector<AsyncNetworkInterface> interfaces_ {};
 
+  // The routing table
+  // A map with keys as the rule's 32 bit prefix IP Address
+  // and values as (Prefix Length, Next Hop, Interface Number) tuples
+  // Ensures one entry per prefix IP Address.
+  std::unordered_map<uint32_t, std::tuple<uint8_t, std::optional<Address>, size_t>> routing_table_ {};
+
+  // Private Helper Method
+  // Searches through the routing table to find the matching route with the longest prefix for the given address
+  // Returns the matching route's prefix IP address, if a match was found.
+  std::optional<uint32_t> find_best_match_( uint32_t address );
+
 public:
   // Add an interface to the router
   // interface: an already-constructed network interface

@@ -1,12 +1,12 @@
 #include "network_interface.hh"
- 
+
 #include "arp_message.hh"
 #include "ethernet_frame.hh"
- 
+
 using namespace std;
- 
+
 // HELPER FUNCTIONS
- 
+
 // determine whether the two ethernet addresses are equal or not
 bool check_ethernet_address_equal( const EthernetAddress add1, const EthernetAddress add2 )
 {
@@ -20,7 +20,7 @@ bool check_ethernet_address_equal( const EthernetAddress add1, const EthernetAdd
   }
   return true;
 }
- 
+
 // create an ethernet frame with the given properties
 EthernetFrame create_ethernet_frame( const uint16_t type,
                                      const EthernetAddress src,
@@ -36,7 +36,7 @@ EthernetFrame create_ethernet_frame( const uint16_t type,
   frame.payload = payload;
   return frame;
 }
- 
+
 // create an arp message with the given properties
 ARPMessage create_arp_message( const uint16_t opcode,
                                const EthernetAddress sender_ethernet_address,
@@ -54,9 +54,9 @@ ARPMessage create_arp_message( const uint16_t opcode,
   }
   return message;
 }
- 
+
 // NetworkInterface
- 
+
 // ethernet_address: Ethernet (what ARP calls "hardware") address of the interface
 // ip_address: IP (what ARP calls "protocol") address of the interface
 NetworkInterface::NetworkInterface( const EthernetAddress& ethernet_address, const Address& ip_address )
@@ -65,11 +65,11 @@ NetworkInterface::NetworkInterface( const EthernetAddress& ethernet_address, con
   cout << "DEBUG: Network interface has Ethernet address " << to_string( ethernet_address_ ) << " and IP address "
        << ip_address.ip() << "\n";
 }
- 
+
 // dgram: the IPv4 datagram to be sent
 // next_hop: the IP address of the interface to send it to (typically a router or default gateway, but
 // may also be another host if directly connected to the same network as the destination)
- 
+
 // Note: the Address type can be converted to a uint32_t (raw 32-bit IP address) by using the
 // Address::ipv4_numeric() method.
 void NetworkInterface::send_datagram( const InternetDatagram& dgram, const Address& next_hop )
@@ -81,12 +81,12 @@ void NetworkInterface::send_datagram( const InternetDatagram& dgram, const Addre
     const std::pair<size_t, EthernetAddress> lookup = arp_table_[dst_ip];
     const EthernetFrame frame = create_ethernet_frame(
       EthernetHeader::TYPE_IPv4, ethernet_address_, std::get<EthernetAddress>( lookup ), serialize( dgram ) );
-    send_queue_.push( frame );
+    send_queue_.push( std::move( frame ) );
   } else {
     send_arp_request_( dgram, dst_ip );
   }
 }
- 
+
 // frame: the incoming Ethernet frame
 optional<InternetDatagram> NetworkInterface::recv_frame( const EthernetFrame& frame )
 {
@@ -114,13 +114,13 @@ optional<InternetDatagram> NetworkInterface::recv_frame( const EthernetFrame& fr
     return {};
   }
 }
- 
+
 // ms_since_last_tick: the number of milliseconds since the last call to this method
 void NetworkInterface::tick( const size_t ms_since_last_tick )
 {
   // increment internal time tracker
   time_ += ms_since_last_tick;
- 
+
   // expire any entry in the arp table that was learnt more than 30 seconds ago
   // code is based on this documentation: https://en.cppreference.com/w/cpp/container/unordered_map/erase
   for ( auto it = arp_table_.begin(); it != arp_table_.end(); ) {
@@ -130,7 +130,7 @@ void NetworkInterface::tick( const size_t ms_since_last_tick )
       ++it;
     }
   }
- 
+
   // remove datagrams waiting for next hop ip address for more than 5 seconds
   // code is based on this documentation: https://en.cppreference.com/w/cpp/container/unordered_map/erase
   for ( auto it = waiting_queues_.begin(); it != waiting_queues_.end(); ) {
@@ -141,69 +141,69 @@ void NetworkInterface::tick( const size_t ms_since_last_tick )
     }
   }
 }
- 
+
 optional<EthernetFrame> NetworkInterface::maybe_send()
 {
-  if ( send_queue_.size() == 0 ) {
+  if ( send_queue_.empty() ) {
     return {};
   }
-  const EthernetFrame frame_to_send = send_queue_.front();
+  const EthernetFrame frame_to_send = std::move( send_queue_.front() );
   send_queue_.pop();
   return frame_to_send;
 }
- 
+
 // Private Helper Functions
- 
-void NetworkInterface::send_arp_request_( const InternetDatagram dgram, const uint32_t dst_ip )
+
+void NetworkInterface::send_arp_request_( const InternetDatagram& dgram, const uint32_t dst_ip )
 {
   if ( waiting_queues_.contains( dst_ip ) && time_ - std::get<size_t>( waiting_queues_[dst_ip] ) <= 5000 ) {
     // we have requested this ip address in the last 5 seconds
     // simply add the datagram to the queue of datagrams waiting on the ip address
-    std::get<1>( waiting_queues_[dst_ip] ).push( dgram );
+    std::get<1>( waiting_queues_[dst_ip] ).push( std::move( dgram ) );
   } else {
     // this ip address has not been requested in the last 5 seconds
     // create queue for datagrams waiting for destination ip's mac address and
     // push datagram to queue
     // we can guarantee that the queue does not exist already because queues are deleted after 5 seconds
     std::queue<InternetDatagram> queue;
-    queue.push( dgram );
+    queue.push( std::move( dgram ) );
     const std::pair<size_t, std::queue<InternetDatagram>> waiting_queue_entry { time_, queue };
     waiting_queues_[dst_ip] = waiting_queue_entry;
- 
+
     // create ARP request for destination ip and add it to ready to send queue
     ARPMessage request
       = create_arp_message( ARPMessage::OPCODE_REQUEST, ethernet_address_, ip_address_.ipv4_numeric(), {}, dst_ip );
     const EthernetFrame frame = create_ethernet_frame(
       EthernetHeader::TYPE_ARP, ethernet_address_, ETHERNET_BROADCAST, serialize( request ) );
-    send_queue_.push( frame );
+    send_queue_.push( std::move( frame ) );
   }
 }
- 
-void NetworkInterface::handle_arp_response_( const ARPMessage response )
+
+void NetworkInterface::handle_arp_response_( const ARPMessage& response )
 {
   // learn mapping between sender's ip address and mac address
   const std::pair<size_t, EthernetAddress> table_entry { time_, response.sender_ethernet_address };
   arp_table_[response.sender_ip_address] = table_entry;
- 
+
   // check if any packets were waiting for this ip address
   // if yes, remove packets from waiting queue and
   // queue them in ready to send queue
   if ( waiting_queues_.contains( response.sender_ip_address ) ) {
     std::queue<InternetDatagram> waiting_datagrams = std::get<1>( waiting_queues_[response.sender_ip_address] );
     while ( !waiting_datagrams.empty() ) {
-      const InternetDatagram dgram = waiting_datagrams.front();
+      const InternetDatagram& dgram = std::move( waiting_datagrams.front() );
       EthernetFrame send_frame = create_ethernet_frame(
         EthernetHeader::TYPE_IPv4, ethernet_address_, response.sender_ethernet_address, serialize( dgram ) );
-      send_queue_.push( send_frame );
+      send_queue_.push( std::move( send_frame ) );
       waiting_datagrams.pop();
     }
   }
- 
+
   // delete waiting queue for sender ip address since we got its mac address
   waiting_queues_.erase( response.sender_ip_address );
 }
- 
-void NetworkInterface::handle_arp_request_( const ARPMessage request )
+
+void NetworkInterface::handle_arp_request_( const ARPMessage& request )
 {
   // check if this is an arp request for our ip address
   // if yes, create arp reply packet and put it in ready to send queue
@@ -215,6 +215,6 @@ void NetworkInterface::handle_arp_request_( const ARPMessage request )
                                            request.sender_ip_address );
     EthernetFrame send_frame = create_ethernet_frame(
       EthernetHeader::TYPE_ARP, ethernet_address_, request.sender_ethernet_address, serialize( reply ) );
-    send_queue_.push( send_frame );
+    send_queue_.push( std::move( send_frame ) );
   }
 }
